@@ -1,201 +1,145 @@
 <template>
-	<div class="login-vue" :style="bg">
-		<div class="container">
-			<p class="title">登录系统</p>
-			<div class="input-c">
-				<Input
-					prefix="ios-contact"
-					v-model="username"
-					placeholder="用户名"
-					clearable
-					@on-blur="verifyUsername"
-				/>
-				<p class="error">{{ usernameError }}</p>
-			</div>
-			<div class="input-c">
-				<Input
-					type="password"
-					v-model="password"
-					prefix="md-lock"
-					placeholder="密码"
-					clearable
-					@on-blur="verifyPassword"
-				/>
-				<p class="error">{{ passwordError }}</p>
-			</div>
-			<Button
-				:loading="isShowLoading"
-				class="submit"
-				type="primary"
-				@click="loginByUserNameAndPassWord"
-			>登录</Button>
-			<!--<p class="account"><span @click="register">注册账号</span> | <span @click="forgetPwd">忘记密码</span></p>-->
+	<div class="login">
+		<div>
+			<h1 style="color: #333; margin-bottom: 40px; text-align: center">登录</h1>
+			<a-form>
+				<a-form-item label="账号：" :label-col="{ span: 4 }" :wrapper-col="{ span: 20 }">
+					<a-input ref="username" placeholder="用户名">
+						<template #prefix>
+							<UserOutlined />
+						</template>
+					</a-input>
+				</a-form-item>
+				<a-form-item label="密码：" :label-col="{ span: 4 }" :wrapper-col="{ span: 20 }">
+					<a-input-password ref="password" placeholder="密码" />
+				</a-form-item>
+				<a-form-item label="验证码：" :label-col="{ span: 4 }" :wrapper-col="{ span: 20 }">
+					<div class="flex">
+						<a-input placeholder="验证码" style="width: 40%" @change="codeInput" />
+						<div id="svgWrapper"></div>
+						<a-button type="link" @click="refreshImg">换一个</a-button>
+					</div>
+				</a-form-item>
+				<a-form-item :wrapper-col="{ span: 14, offset: 4 }">
+					<div class="flex">
+						<span></span>
+						<a-button type="primary" style="margin-left: 8px" @click="handleSubmit">登陆</a-button>
+						<a-button @click="handleReset">重置</a-button>
+						<!-- <router-link to="/register" style="margin-left: 30px">去注册</router-link> -->
+					</div>
+				</a-form-item>
+			</a-form>
+		</div>
+		<div class="bg__container">
+			<div class="bg"></div>
 		</div>
 	</div>
 </template>
 
 <script>
-import { LoginByUserNameAndPassWord } from "../../../api/login";
+import { message } from 'ant-design-vue';
+import { UserOutlined } from '@ant-design/icons-vue';
+import { loginApi } from '@/api';
+import { useMainStore } from '@/store/user';
+import docCookies from '@/utils/cookie';
 
 export default {
-	name: 'Login',
+	components: { UserOutlined },
 	data() {
 		return {
-			username: '',
-			password: '',
-			usernameError: '',
-			passwordError: '',
-			isShowLoading: false,
-			bg: {
-				backgroundImage: 'url(' + require('../../../assets/bg04.jpg'),
-				backgroundPosition: 'center center',
-				backgroundRepeat: "no-repeat",
-				backgroundSize: "cover",
-			}
-		}
+			submit: {
+				user_name: '',
+				password: '',
+			},
+			code: '',
+			randomNum: 0.0,
+		};
 	},
 	mounted() {
-		document.onkeydown = e => {
-			if (e.keyCode == 13) {
-				this.loginByUserNameAndPassWord()
-			}
-		}
+		this.refreshImg();
 	},
 	methods: {
-		verifyUsername(e) {
-			if (this.username === '') {
-				this.usernameError = '用户名不能为空！'
-			} else {
-				this.usernameError = ''
+		refreshNum() {
+			let newNum = 0;
+			while (newNum === 0 || newNum === this.randomNum) {
+				newNum = Math.random() * 10;
+			}
+			this.randomNum = newNum;
+		},
+		codeInput(e) {
+			docCookies.setItem('captcha_client', e.target.value, null, '/');
+		},
+		async refreshImg() {
+			this.refreshNum();
+			const svgWrapper = document.getElementById('svgWrapper');
+			svgWrapper.innerHTML = '';
+			const res = await loginApi.getImg({ v: this.randomNum });
+			svgWrapper.innerHTML = res;
+		},
+		async handleSubmit() {
+			const store = useMainStore();
+			const form = {
+				user_name: this.$refs.username.stateValue,
+				password: this.$refs.password.input.stateValue,
+			};
+			let res = null;
+			try {
+				res = await loginApi.login(form);
+			} catch (e) {
+				//
+			}
+			store.updateStatus();
+			switch (res?.code) {
+				case 0:
+					docCookies.setItem('jwt_token', res?.result.jwt_token, null, '/');
+					docCookies.setItem('user', res?.result.user_name, null, '/');
+					message.success('登录成功,即将跳转到主页');
+					setTimeout(() => this.$router.push({ path: `/projects` }), 3000);
+					break;
+				default:
+					this.refreshImg();
+					break;
 			}
 		},
-		verifyPassword(e) {
-			if (this.password === '') {
-				this.passwordError = '密码不能为空！'
-			} else {
-				this.passwordError = ''
-			}
+		handleReset() {
+			this.submit = {};
 		},
-		faceLogin() {
-			this.$router.replace({ name: 'FaceLogin' });
-		},
-		loginByUserNameAndPassWord() {
-			if (this.username !== '' && this.password !== '') {
-				this.isShowLoading = true;
-				return new Promise(((resolve, reject) => {
-					LoginByUserNameAndPassWord(this.username, this.password).then(response => {
-						if (response.status === 201) {
-							document.onkeydown = undefined;
-							this.$Message.success("登录成功，即将跳转到主页!");
-							// 登录成功，设置用户信息
-							this.$store.commit('setUser', {
-								userId: response.data.userId,
-								userName: response.data.userName,
-								userGender: response.data.userGender,
-								userEmail: response.data.userEmail,
-								userRoleName: response.data.userRoleName
-							});
-							this.isShowLoading = false;
-							this.$router.replace('index')
-						} else {
-							this.$Message.error(response.data.error);
-							this.isShowLoading = false;
-						}
-					}).catch(error => {
-						this.$Message.error(error.response.data.error);
-						this.isShowLoading = false;
-						reject(error);
-					})
-				}));
-			} else {
-				this.$Message.warning("请输入用户名和密码");
-			}
-		},
-	}
-}
+	},
+};
 </script>
 
-<style>
-.login-vue {
-	height: 100%;
+<style lang="less" scoped>
+.login {
+	height: 80vh;
 	display: flex;
-	justify-content: center;
+	flex-direction: column;
+	justify-content: space-around;
 	align-items: center;
-	color: #fff;
+	position: relative;
+	.bg__container {
+		width: 100%;
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		.bg {
+			width: 500px;
+			height: 300px;
+			background-size: contain;
+			background-repeat: no-repeat;
+			background-image: url(https://cdn.jsdelivr.net/gh/Merlin218/image-storage@master/picX/team.70peflw2sge8.webp);
+		}
+	}
 }
 
-.login-vue .container {
-	background: rgba(255, 255, 255, 0.5);
-	width: 360px;
-	text-align: center;
-	border-radius: 10px;
-	padding: 50px;
+.flex {
+	width: 340px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
 }
-
-.login-vue .ivu-input {
-	background-color: transparent;
-	color: #fff;
-	outline: #fff;
-	border-color: #fff;
-}
-
-.login-vue ::-webkit-input-placeholder {
-	/* WebKit, Blink, Edge */
-	color: rgba(255, 255, 255, 0.8);
-}
-
-.login-vue :-moz-placeholder {
-	/* Mozilla Firefox 4 to 18 */
-	color: rgba(255, 255, 255, 0.8);
-}
-
-.login-vue ::-moz-placeholder {
-	/* Mozilla Firefox 19+ */
-	color: rgba(255, 255, 255, 0.8);
-}
-
-.login-vue :-ms-input-placeholder {
-	/* Internet Explorer 10-11 */
-	color: rgba(255, 255, 255, 0.8);
-}
-
-.login-vue .title {
-	font-size: 16px;
-	margin-bottom: 20px;
-}
-
-.login-vue .input-c {
-	margin: auto;
-	width: 200px;
-}
-
-.login-vue .error {
-	color: red;
-	text-align: left;
-	margin: 5px auto;
-	font-size: 12px;
-	padding-left: 30px;
-	height: 20px;
-}
-
-.login-vue .submit {
-	width: 200px;
-}
-
-.login-vue .account {
-	margin-top: 30px;
-}
-
-.login-vue .account span {
-	cursor: pointer;
-}
-
-.login-vue .ivu-icon {
-	color: #eee;
-}
-
-.login-vue .ivu-icon-ios-close-circle {
-	color: #777;
+#svgWrapper {
+	width: 123px;
+	height: 43px;
+	border: 1px solid rgba(0, 0, 0, 0.2);
 }
 </style>
-

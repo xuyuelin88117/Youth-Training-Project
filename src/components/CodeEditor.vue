@@ -1,13 +1,17 @@
 <template>
 	<div class="editor-wrapper">
+		<a-button class="copy" @click="copyCode">复制代码</a-button>
 		<textarea id="editor" v-model="code" style="height: 100% !important"></textarea>
 	</div>
 </template>
 
 <script lang="ts" setup>
 import { ref, unref, onMounted } from 'vue';
+import ClipboardJS from 'clipboard';
+import { message } from 'ant-design-vue';
 import CodeMirror, { EditorConfiguration } from 'codemirror';
 import 'codemirror/mode/javascript/javascript.js';
+import 'codemirror/mode/htmlmixed/htmlmixed.js';
 import 'codemirror/addon/lint/javascript-lint.js';
 import 'codemirror/addon/lint/lint.css';
 import 'codemirror/lib/codemirror.css';
@@ -31,10 +35,9 @@ const emit = defineEmits(['update:modelValue', 'init', 'input']);
 
 const codeEditor = ref<any>(null);
 
-const fakeCode = 'function myScript(){return 100;}\n';
-const code = ref<string>(fakeCode || props.modelValue);
+const code = ref<string>(props.modelValue);
 const options: EditorConfiguration = {
-	mode: { name: 'javascript', json: true }, // 不设置的话，默认使用第一个引用
+	mode: { name: 'htmlmixed', json: true }, // 不设置的话，默认使用第一个引用
 	// 缩进格式
 	tabSize: 2,
 	// 主题，对应主题库 JS 需要提前引入
@@ -61,15 +64,41 @@ const initEditorEvent = () => {
 	});
 };
 
+const copyCode = () => {
+	const copy = new ClipboardJS('.copy', {
+		text: () => {
+			return code.value;
+		},
+	});
+	copy.on('success', e => {
+		message.success('复制成功');
+
+		e.clearSelection();
+	});
+};
+
 onMounted(() => {
 	initCodeEditor();
 	initEditorEvent();
 });
 </script>
 
+<script lang="ts">
+export default {
+	name: 'CodeEditor',
+};
+</script>
+
 <style lang="less" scoped>
 .editor-wrapper {
 	height: 100%;
+	position: relative;
+}
+.copy {
+	z-index: 99;
+	position: absolute;
+	top: 10px;
+	right: 20px;
 }
 :deep(.CodeMirror) {
 	height: 100%;
